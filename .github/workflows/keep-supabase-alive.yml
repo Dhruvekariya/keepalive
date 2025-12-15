@@ -3,7 +3,7 @@ name: Keep Supabase Alive
 on:
   schedule:
     # Runs every 3 days at 10:00 AM UTC (twice per week)
-    - cron: '0 10 */3 * *'
+    - cron: "0 10 */3 * *"
   workflow_dispatch: # Allows manual trigger
 
 jobs:
@@ -14,7 +14,7 @@ jobs:
       - name: Ping Database 1
         run: |
           curl -X GET \
-            'https://dfqaayjihclbmnwijryi.supabase.co/rest/v1/' \
+            '${{ secrets.SUPABASE_URL_1 }}/rest/v1/' \
             -H "apikey: ${{ secrets.SUPABASE_KEY_1 }}" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY_1 }}"
           echo "Database 1 pinged successfully"
@@ -22,7 +22,7 @@ jobs:
       - name: Ping Database 2
         run: |
           curl -X GET \
-            'https://mkfpswmzsuulhzytlvmp.supabase.co/rest/v1/' \
+            '${{ secrets.SUPABASE_URL_2 }}/rest/v1/' \
             -H "apikey: ${{ secrets.SUPABASE_KEY_2 }}" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY_2 }}"
           echo "Database 2 pinged successfully"
