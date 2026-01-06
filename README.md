@@ -1,144 +1,94 @@
 # Supabase Keep Alive
 
-Automatically keeps Supabase databases active by performing write operations twice daily, preventing them from pausing due to inactivity on the free tier.
+Keeps your Supabase free-tier databases from pausing after 7 days of inactivity.
 
-## How it works
+Runs twice daily (6 AM & 6 PM UTC), inserts a record into a `keep_alive` table, then deletes it immediately.
 
-GitHub Actions runs a scheduled workflow **twice daily** (every 12 hours at 6 AM and 6 PM UTC) that:
-
-1. **Inserts** a temporary record into your database
-2. **Deletes** the record immediately after
-3. This active write/delete cycle signals strong database activity to Supabase
-
-### Database-specific operations:
-
-- **Database 1**: Inserts/deletes a temporary record in the `keep_alive` table
-- **Database 2**: Inserts/deletes a temporary record in the `keep_alive` table
-
-Both databases use dedicated `keep_alive` tables that are separate from your production schema, ensuring no interference with your application data.
-
-This approach is more effective than simple read queries because write operations are a stronger indicator of active database usage.
+---
 
 ## Setup
 
-### 1. Configure GitHub Secrets
+### 1. Get your Supabase service role keys
 
-Add your Supabase project details as GitHub Secrets in your repository:
+For each database:
+1. Open Supabase Dashboard
+2. Go to Settings → API
+3. Copy the **`service_role`** key (not the anon key)
 
-- `SUPABASE_URL_1` - Full URL for database 1 (e.g., `https://xxxxx.supabase.co`)
-- `SUPABASE_KEY_1` - **Service role key** for database 1 (NOT anon/public)
-- `SUPABASE_URL_2` - Full URL for database 2 (e.g., `https://xxxxx.supabase.co`)
-- `SUPABASE_KEY_2` - **Service role key** for database 2 (NOT anon/public)
+### 2. Add keys to GitHub Secrets
 
-**Important:** Use the **service_role** key to enable insert/delete operations without RLS policy modifications.
+```bash
+gh secret set SUPABASE_URL_1     # Paste your Database 1 URL
+gh secret set SUPABASE_KEY_1     # Paste your Database 1 service_role key
+gh secret set SUPABASE_URL_2     # Paste your Database 2 URL
+gh secret set SUPABASE_KEY_2     # Paste your Database 2 service_role key
+```
 
-### 2. Verify keep_alive tables exist
+Or set them manually: GitHub repo → Settings → Secrets and variables → Actions → New repository secret
 
-**Database 1**: Already has a `keep_alive` table ✅ (no action needed)
+### 3. Create keep_alive table in Database 2
 
-**Database 2**: Run the SQL script `create_keepalive_table.sql` in your Database 2 SQL Editor:
+Database 1 already has it. For Database 2, run this SQL:
 
 ```sql
--- This creates the keep_alive table with proper RLS policies
--- See create_keepalive_table.sql for the full script
+DROP TABLE IF EXISTS public.keep_alive CASCADE;
+
+CREATE TABLE public.keep_alive (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    ping_time timestamptz DEFAULT now() NOT NULL
+);
+
+ALTER TABLE public.keep_alive ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow all operations" ON public.keep_alive
+    FOR ALL TO public USING (true) WITH CHECK (true);
 ```
 
-If you already ran this script, you're all set! ✅
+### 4. Done
 
-### 3. Automated Execution
-
-- The workflow runs automatically twice daily (6 AM & 6 PM UTC)
-- You can also trigger it manually from the GitHub Actions tab
-- No additional configuration needed!
-
-## Getting your Supabase details
-
-1. Go to your Supabase project dashboard
-2. Navigate to **Settings** → **General**
-3. Copy the "Project URL" (e.g., `https://xxxxxxxxxxxxx.supabase.co`)
-4. Navigate to **Settings** → **API**
-5. Copy the **`service_role`** key (scroll down to find it)
-   - ⚠️ **Do NOT use the anon/public key**
-   - The service_role key bypasses RLS and allows insert/delete operations
-
-## Quick Setup with Script
-
-The easiest way to set up your secrets:
+The workflow runs automatically twice a day. You can also trigger it manually:
 
 ```bash
-cd /Users/dhruvvekariya/keepalive
-./update-secrets.sh
+gh workflow run keep-supabase-alive.yml
 ```
 
-The script will prompt you to paste your service role keys.
+---
 
-## Manual Setup (Alternative)
+## How it works
 
-1. Go to your GitHub repository
-2. Click **Settings** → **Secrets and variables** → **Actions**
-3. Update/create these secrets:
-   - `SUPABASE_URL_1` - Your Database 1 URL
-   - `SUPABASE_KEY_1` - Your Database 1 **service_role** key
-   - `SUPABASE_URL_2` - Your Database 2 URL
-   - `SUPABASE_KEY_2` - Your Database 2 **service_role** key
+- Inserts a record with timestamp
+- Deletes the record immediately
+- Write operations signal active database usage to Supabase
+- Service role key bypasses RLS policies
 
-Or use the GitHub CLI:
+---
+
+## Verify it's working
 
 ```bash
-gh secret set SUPABASE_KEY_1  # Paste service_role key when prompted
-gh secret set SUPABASE_KEY_2  # Paste service_role key when prompted
+gh run list --limit 1
 ```
 
-## Schedule Details
+Should show `success`. Check logs:
 
-The workflow runs twice daily at:
-- **6:00 AM UTC** (morning run)
-- **6:00 PM UTC** (evening run)
+```bash
+gh run view <run-id> --log | grep "✓"
+```
 
-This ensures at least 2 write operations per day, well within the 7-day inactivity threshold.
+Should see:
+```
+✓ Record inserted successfully with ID: X
+✓ Database 1 kept alive successfully (insert+delete)
+✓ Record inserted successfully with ID: Y
+✓ Database 2 kept alive successfully (insert+delete)
+```
+
+---
 
 ## Troubleshooting
 
-### Database is paused
-If your database gets paused, manually resume it from the Supabase dashboard. The workflow will keep it alive going forward.
+**Workflow fails**: Check that you used `service_role` key, not `anon` key
 
-### Workflow fails with "table not found"
-- **Database 1**: The `keep_alive` table should already exist in your schema
-- **Database 2**: Make sure you've created the `keep_alive` table using `create_keepalive_table.sql`
+**Table not found**: Run the SQL script for Database 2
 
-### Permission errors (401/403)
-The workflow includes fallback read queries. Even if insert/delete fails due to RLS policies, the read query will keep the database alive.
-
-### Check workflow status
-Go to the **Actions** tab in your GitHub repository to see detailed logs of each run.
-
-## Security Notes
-
-### Why Service Role Keys?
-
-- **Bypasses RLS**: No need to modify Row Level Security policies
-- **Full permissions**: Can insert and delete records
-- **Secure storage**: GitHub Secrets are encrypted
-- **No exposure**: Keys never appear in logs or code
-
-### Is this safe?
-
-✅ **Yes, when stored in GitHub Secrets:**
-- GitHub encrypts all secrets
-- Secrets are never visible in workflow logs
-- Only your GitHub Actions can access them
-- The workflow only performs insert+delete operations
-
-⚠️ **Important:**
-- Never commit service role keys to git
-- Only store them in GitHub Secrets
-- The workflow deletes records immediately after inserting
-
-## Technical Details
-
-- Uses REST API with insert/delete operations
-- Service role key bypasses RLS for write operations
-- Timestamps ensure unique records
-- Automatic cleanup (delete immediately after insert)
-- Fallback to read queries if write operations fail
-- Runs on GitHub's infrastructure (no cost to you)
+**Want to change schedule**: Edit `.github/workflows/keep-supabase-alive.yml` line 6
