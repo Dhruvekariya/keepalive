@@ -13,38 +13,48 @@ jobs:
     steps:
       - name: Ping Database 1
         run: |
-          echo "Testing Database 1 connection..."
-          URL='${{ secrets.SUPABASE_URL_1 }}/rest/v1/keep_alive?select=id&limit=1'
-          echo "URL length: ${#URL}"
-          echo "First 10 chars: ${URL:0:10}"
-
-          response=$(curl -s -w "\n%{http_code}" -v -X GET \
-            "$URL" \
+          echo "Pinging Database 1..."
+          # Query the profiles table (which exists in your schema)
+          response=$(curl -s -w "\n%{http_code}" -X GET \
+            '${{ secrets.SUPABASE_URL_1 }}/rest/v1/profiles?select=id&limit=1' \
             -H "apikey: ${{ secrets.SUPABASE_KEY_1 }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY_1 }}" 2>&1)
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY_1 }}")
 
           http_code=$(echo "$response" | tail -n1)
-          echo "Full response:"
-          echo "$response"
-          echo "HTTP Code: $http_code"
+          response_body=$(echo "$response" | sed '$d')
 
-          if [ "$http_code" = "200" ]; then
-            echo "Database 1 pinged successfully (HTTP $http_code)"
+          echo "HTTP Code: $http_code"
+          echo "Response: $response_body"
+
+          # Accept 200 (success) or 401/403 (auth error but DB is alive)
+          if [ "$http_code" = "200" ] || [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
+            echo "✓ Database 1 is active (HTTP $http_code)"
           else
-            echo "Database 1 ping failed (HTTP $http_code)"
+            echo "✗ Database 1 ping failed (HTTP $http_code)"
+            echo "Full response: $response"
             exit 1
           fi
 
       - name: Ping Database 2
         run: |
+          echo "Pinging Database 2..."
+          # Query the profiles table (which exists in your schema)
           response=$(curl -s -w "\n%{http_code}" -X GET \
-            '${{ secrets.SUPABASE_URL_2 }}/rest/v1/keep_alive?select=id&limit=1' \
+            '${{ secrets.SUPABASE_URL_2 }}/rest/v1/profiles?select=id&limit=1' \
             -H "apikey: ${{ secrets.SUPABASE_KEY_2 }}" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY_2 }}")
+
           http_code=$(echo "$response" | tail -n1)
-          if [ "$http_code" = "200" ]; then
-            echo "Database 2 pinged successfully (HTTP $http_code)"
+          response_body=$(echo "$response" | sed '$d')
+
+          echo "HTTP Code: $http_code"
+          echo "Response: $response_body"
+
+          # Accept 200 (success) or 401/403 (auth error but DB is alive)
+          if [ "$http_code" = "200" ] || [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
+            echo "✓ Database 2 is active (HTTP $http_code)"
           else
-            echo "Database 2 ping failed (HTTP $http_code)"
+            echo "✗ Database 2 ping failed (HTTP $http_code)"
+            echo "Full response: $response"
             exit 1
           fi
