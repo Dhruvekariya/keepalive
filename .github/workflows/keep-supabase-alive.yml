@@ -2,8 +2,8 @@ name: Keep Supabase Alive
 
 on:
   schedule:
-    # Runs every 2 days at 10:00 AM UTC (twice per week)
-    - cron: "0 10 */2 * *"
+    # Runs twice daily at 12-hour intervals (6 AM and 6 PM UTC)
+    - cron: "0 6,18 * * *"
   workflow_dispatch: # Allows manual trigger
 
 jobs:
@@ -11,62 +11,134 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Ping Database 1
+      - name: Keep Database 1 Alive
         run: |
-          echo "Pinging Database 1..."
-          # Query the drivers table (suggested by the database error)
-          response=$(curl -s -w "\n%{http_code}" -X GET \
-            '${{ secrets.SUPABASE_URL_1 }}/rest/v1/drivers?select=id&limit=1' \
+          echo "Keeping Database 1 alive..."
+          TIMESTAMP=$(date +%s)
+          DRIVER_NAME="keepalive_${TIMESTAMP}"
+
+          # Step 1: Insert a temporary driver
+          echo "Inserting temporary driver: $DRIVER_NAME"
+          insert_response=$(curl -s -w "\n%{http_code}" -X POST \
+            '${{ secrets.SUPABASE_URL_1 }}/rest/v1/drivers' \
             -H "apikey: ${{ secrets.SUPABASE_KEY_1 }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY_1 }}")
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY_1 }}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=representation" \
+            -d "{\"name\":\"$DRIVER_NAME\",\"is_active\":false}")
 
-          http_code=$(echo "$response" | tail -n1)
-          response_body=$(echo "$response" | sed '$d')
+          insert_http_code=$(echo "$insert_response" | tail -n1)
+          insert_body=$(echo "$insert_response" | sed '$d')
 
-          echo "HTTP Code: $http_code"
-          echo "Response: $response_body"
+          echo "Insert HTTP Code: $insert_http_code"
+          echo "Insert Response: $insert_body"
 
-          # Accept 200 (success), 401/403 (auth error but DB is alive), or 406 (empty table)
-          if [ "$http_code" = "200" ] || [ "$http_code" = "401" ] || [ "$http_code" = "403" ] || [ "$http_code" = "406" ]; then
-            echo "✓ Database 1 is active (HTTP $http_code)"
+          # Extract the ID from the response
+          DRIVER_ID=$(echo "$insert_body" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+          if [ -n "$DRIVER_ID" ]; then
+            echo "✓ Driver inserted successfully with ID: $DRIVER_ID"
+
+            # Step 2: Delete the temporary driver
+            echo "Deleting temporary driver..."
+            delete_response=$(curl -s -w "\n%{http_code}" -X DELETE \
+              "${{ secrets.SUPABASE_URL_1 }}/rest/v1/drivers?id=eq.$DRIVER_ID" \
+              -H "apikey: ${{ secrets.SUPABASE_KEY_1 }}" \
+              -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY_1 }}")
+
+            delete_http_code=$(echo "$delete_response" | tail -n1)
+            echo "Delete HTTP Code: $delete_http_code"
+
+            if [ "$delete_http_code" = "204" ] || [ "$delete_http_code" = "200" ]; then
+              echo "✓ Database 1 kept alive successfully (insert+delete)"
+            else
+              echo "⚠ Insert succeeded but delete failed (HTTP $delete_http_code)"
+              echo "Database is still alive, but cleanup failed"
+            fi
           else
-            echo "✗ Database 1 ping failed (HTTP $http_code)"
-            echo "Full response: $response"
-            exit 1
-          fi
-
-      - name: Ping Database 2
-        run: |
-          echo "Pinging Database 2..."
-          # Try multiple tables with fallback - just need to wake the DB
-          success=false
-
-          # Try drivers table first
-          response=$(curl -s -w "\n%{http_code}" -X GET \
-            '${{ secrets.SUPABASE_URL_2 }}/rest/v1/drivers?select=id&limit=1' \
-            -H "apikey: ${{ secrets.SUPABASE_KEY_2 }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY_2 }}")
-          http_code=$(echo "$response" | tail -n1)
-
-          if [ "$http_code" = "200" ] || [ "$http_code" = "401" ] || [ "$http_code" = "403" ] || [ "$http_code" = "406" ]; then
-            success=true
-            echo "✓ Database 2 is active via /drivers (HTTP $http_code)"
-          else
-            echo "Drivers table not found (HTTP $http_code), trying root endpoint..."
-            # Fallback: Just ping the REST API root
+            # If insert fails, try a simple read query as fallback
+            echo "⚠ Insert failed, falling back to read query..."
             response=$(curl -s -w "\n%{http_code}" -X GET \
-              '${{ secrets.SUPABASE_URL_2 }}/rest/v1/' \
-              -H "apikey: ${{ secrets.SUPABASE_KEY_2 }}" \
-              -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY_2 }}")
-            http_code=$(echo "$response" | tail -n1)
+              '${{ secrets.SUPABASE_URL_1 }}/rest/v1/drivers?select=id&limit=1' \
+              -H "apikey: ${{ secrets.SUPABASE_KEY_1 }}" \
+              -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY_1 }}")
 
+            http_code=$(echo "$response" | tail -n1)
             if [ "$http_code" = "200" ] || [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
-              success=true
-              echo "✓ Database 2 is active via root endpoint (HTTP $http_code)"
+              echo "✓ Database 1 is active via fallback read (HTTP $http_code)"
+            else
+              echo "✗ Database 1 keepalive failed"
+              exit 1
             fi
           fi
 
-          if [ "$success" = "false" ]; then
-            echo "✗ Database 2 ping failed - all endpoints returned errors"
-            exit 1
+      - name: Keep Database 2 Alive
+        run: |
+          echo "Keeping Database 2 alive..."
+          TIMESTAMP=$(date +%s)
+
+          # Step 1: Insert a temporary record into keep_alive table
+          echo "Inserting temporary keepalive record..."
+          insert_response=$(curl -s -w "\n%{http_code}" -X POST \
+            '${{ secrets.SUPABASE_URL_2 }}/rest/v1/keep_alive' \
+            -H "apikey: ${{ secrets.SUPABASE_KEY_2 }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY_2 }}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=representation" \
+            -d "{\"ping_time\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}")
+
+          insert_http_code=$(echo "$insert_response" | tail -n1)
+          insert_body=$(echo "$insert_response" | sed '$d')
+
+          echo "Insert HTTP Code: $insert_http_code"
+          echo "Insert Response: $insert_body"
+
+          # Extract the ID from the response
+          RECORD_ID=$(echo "$insert_body" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+          if [ -n "$RECORD_ID" ]; then
+            echo "✓ Record inserted successfully with ID: $RECORD_ID"
+
+            # Step 2: Delete the temporary record
+            echo "Deleting temporary record..."
+            delete_response=$(curl -s -w "\n%{http_code}" -X DELETE \
+              "${{ secrets.SUPABASE_URL_2 }}/rest/v1/keep_alive?id=eq.$RECORD_ID" \
+              -H "apikey: ${{ secrets.SUPABASE_KEY_2 }}" \
+              -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY_2 }}")
+
+            delete_http_code=$(echo "$delete_response" | tail -n1)
+            echo "Delete HTTP Code: $delete_http_code"
+
+            if [ "$delete_http_code" = "204" ] || [ "$delete_http_code" = "200" ]; then
+              echo "✓ Database 2 kept alive successfully (insert+delete)"
+            else
+              echo "⚠ Insert succeeded but delete failed (HTTP $delete_http_code)"
+              echo "Database is still alive, but cleanup failed"
+            fi
+          else
+            # If insert fails, try a simple read query as fallback
+            echo "⚠ Insert failed, falling back to read query..."
+            response=$(curl -s -w "\n%{http_code}" -X GET \
+              '${{ secrets.SUPABASE_URL_2 }}/rest/v1/keep_alive?select=id&limit=1' \
+              -H "apikey: ${{ secrets.SUPABASE_KEY_2 }}" \
+              -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY_2 }}")
+
+            http_code=$(echo "$response" | tail -n1)
+            if [ "$http_code" = "200" ] || [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
+              echo "✓ Database 2 is active via fallback read (HTTP $http_code)"
+            else
+              echo "⚠ keep_alive table might not exist. Trying root endpoint..."
+              response=$(curl -s -w "\n%{http_code}" -X GET \
+                '${{ secrets.SUPABASE_URL_2 }}/rest/v1/' \
+                -H "apikey: ${{ secrets.SUPABASE_KEY_2 }}" \
+                -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY_2 }}")
+              http_code=$(echo "$response" | tail -n1)
+
+              if [ "$http_code" = "200" ] || [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
+                echo "✓ Database 2 is active via root endpoint (HTTP $http_code)"
+              else
+                echo "✗ Database 2 keepalive failed"
+                exit 1
+              fi
+            fi
           fi

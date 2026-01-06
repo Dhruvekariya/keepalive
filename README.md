@@ -1,24 +1,47 @@
 # Supabase Keep Alive
 
-Automatically pings Supabase databases every 2 days to prevent them from pausing due to inactivity on the free tier.
+Automatically keeps Supabase databases active by performing write operations twice daily, preventing them from pausing due to inactivity on the free tier.
 
 ## How it works
 
-GitHub Actions runs a scheduled workflow every 2 days that sends REST API requests to your Supabase databases. This keeps them active and prevents the automatic pause that occurs after 7 days of inactivity.
+GitHub Actions runs a scheduled workflow **twice daily** (every 12 hours at 6 AM and 6 PM UTC) that:
 
-The workflow queries the `profiles` table (or any existing table in your database) to register activity.
+1. **Inserts** a temporary record into your database
+2. **Deletes** the record immediately after
+3. This active write/delete cycle signals strong database activity to Supabase
+
+### Database-specific operations:
+
+- **Database 1**: Inserts/deletes a temporary driver named `keepalive_<timestamp>` in the `drivers` table
+- **Database 2**: Inserts/deletes a temporary record in the `keep_alive` table
+
+This approach is more effective than simple read queries because write operations are a stronger indicator of active database usage.
 
 ## Setup
 
-1. Add your Supabase project details as GitHub Secrets:
+### 1. Configure GitHub Secrets
 
-   - `SUPABASE_URL_1` - Full URL for database 1 (e.g., `https://xxxxx.supabase.co`)
-   - `SUPABASE_KEY_1` - Anon/Public key for database 1
-   - `SUPABASE_URL_2` - Full URL for database 2 (e.g., `https://xxxxx.supabase.co`)
-   - `SUPABASE_KEY_2` - Anon/Public key for database 2
+Add your Supabase project details as GitHub Secrets in your repository:
 
-2. The workflow runs automatically every 2 days at 10:00 AM UTC
-3. You can also trigger it manually from the Actions tab
+- `SUPABASE_URL_1` - Full URL for database 1 (e.g., `https://xxxxx.supabase.co`)
+- `SUPABASE_KEY_1` - Anon/Public key for database 1
+- `SUPABASE_URL_2` - Full URL for database 2 (e.g., `https://xxxxx.supabase.co`)
+- `SUPABASE_KEY_2` - Anon/Public key for database 2
+
+### 2. Create the keep_alive table in Database 2
+
+Run the SQL script `create_keepalive_table.sql` in your Database 2 SQL Editor (Supabase Dashboard):
+
+```sql
+-- This creates the keep_alive table with proper RLS policies
+-- See create_keepalive_table.sql for the full script
+```
+
+### 3. Automated Execution
+
+- The workflow runs automatically twice daily (6 AM & 6 PM UTC)
+- You can also trigger it manually from the GitHub Actions tab
+- No additional configuration needed!
 
 ## Getting your Supabase details
 
@@ -28,8 +51,40 @@ The workflow queries the `profiles` table (or any existing table in your databas
 4. Navigate to **Settings** → **API**
 5. Copy the "anon/public" key from the API keys section
 
+## How to add GitHub Secrets
+
+1. Go to your GitHub repository
+2. Click **Settings** → **Secrets and variables** → **Actions**
+3. Click **New repository secret**
+4. Add each secret (SUPABASE_URL_1, SUPABASE_KEY_1, etc.)
+
+## Schedule Details
+
+The workflow runs twice daily at:
+- **6:00 AM UTC** (morning run)
+- **6:00 PM UTC** (evening run)
+
+This ensures at least 2 write operations per day, well within the 7-day inactivity threshold.
+
 ## Troubleshooting
 
-- **Database is paused**: If your database gets paused, you need to manually resume it from the Supabase dashboard. The workflow will then keep it alive going forward.
-- **Workflow fails**: Check the Actions tab to see error logs. Common issues include incorrect secrets or database being paused.
-- **Schedule frequency**: Running every 2 days provides a buffer before the 7-day inactivity limit.
+### Database is paused
+If your database gets paused, manually resume it from the Supabase dashboard. The workflow will keep it alive going forward.
+
+### Workflow fails with "table not found"
+- **Database 2**: Make sure you've created the `keep_alive` table using `create_keepalive_table.sql`
+- **Database 1**: The `drivers` table should already exist in your water bottle management schema
+
+### Permission errors (401/403)
+The workflow includes fallback read queries. Even if insert/delete fails due to RLS policies, the read query will keep the database alive.
+
+### Check workflow status
+Go to the **Actions** tab in your GitHub repository to see detailed logs of each run.
+
+## Technical Details
+
+- Uses REST API with insert/delete operations
+- Timestamps ensure unique records
+- Automatic cleanup (delete immediately after insert)
+- Fallback to read queries if write operations fail
+- Runs on GitHub's infrastructure (no cost to you)
