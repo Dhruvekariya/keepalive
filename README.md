@@ -18,11 +18,13 @@ For each database:
 ### 2. Add keys to GitHub Secrets
 
 ```bash
-gh secret set SUPABASE_URL_1     # Paste your Database 1 URL
+gh secret set SUPABASE_URL_1     # Example: https://abcdefgh.supabase.co
 gh secret set SUPABASE_KEY_1     # Paste your Database 1 service_role key
-gh secret set SUPABASE_URL_2     # Paste your Database 2 URL
+gh secret set SUPABASE_URL_2     # Example: https://ijklmnop.supabase.co
 gh secret set SUPABASE_KEY_2     # Paste your Database 2 service_role key
 ```
+
+**URL format:** `https://your-project-id.supabase.co` (no trailing slash)
 
 Or set them manually: GitHub repo → Settings → Secrets and variables → Actions → New repository secret
 
