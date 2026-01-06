@@ -24,9 +24,11 @@ This approach is more effective than simple read queries because write operation
 Add your Supabase project details as GitHub Secrets in your repository:
 
 - `SUPABASE_URL_1` - Full URL for database 1 (e.g., `https://xxxxx.supabase.co`)
-- `SUPABASE_KEY_1` - Anon/Public key for database 1
+- `SUPABASE_KEY_1` - **Service role key** for database 1 (NOT anon/public)
 - `SUPABASE_URL_2` - Full URL for database 2 (e.g., `https://xxxxx.supabase.co`)
-- `SUPABASE_KEY_2` - Anon/Public key for database 2
+- `SUPABASE_KEY_2` - **Service role key** for database 2 (NOT anon/public)
+
+**Important:** Use the **service_role** key to enable insert/delete operations without RLS policy modifications.
 
 ### 2. Create the keep_alive table in Database 2
 
@@ -49,14 +51,37 @@ Run the SQL script `create_keepalive_table.sql` in your Database 2 SQL Editor (S
 2. Navigate to **Settings** → **General**
 3. Copy the "Project URL" (e.g., `https://xxxxxxxxxxxxx.supabase.co`)
 4. Navigate to **Settings** → **API**
-5. Copy the "anon/public" key from the API keys section
+5. Copy the **`service_role`** key (scroll down to find it)
+   - ⚠️ **Do NOT use the anon/public key**
+   - The service_role key bypasses RLS and allows insert/delete operations
 
-## How to add GitHub Secrets
+## Quick Setup with Script
+
+The easiest way to set up your secrets:
+
+```bash
+cd /Users/dhruvvekariya/keepalive
+./update-secrets.sh
+```
+
+The script will prompt you to paste your service role keys.
+
+## Manual Setup (Alternative)
 
 1. Go to your GitHub repository
 2. Click **Settings** → **Secrets and variables** → **Actions**
-3. Click **New repository secret**
-4. Add each secret (SUPABASE_URL_1, SUPABASE_KEY_1, etc.)
+3. Update/create these secrets:
+   - `SUPABASE_URL_1` - Your Database 1 URL
+   - `SUPABASE_KEY_1` - Your Database 1 **service_role** key
+   - `SUPABASE_URL_2` - Your Database 2 URL
+   - `SUPABASE_KEY_2` - Your Database 2 **service_role** key
+
+Or use the GitHub CLI:
+
+```bash
+gh secret set SUPABASE_KEY_1  # Paste service_role key when prompted
+gh secret set SUPABASE_KEY_2  # Paste service_role key when prompted
+```
 
 ## Schedule Details
 
@@ -81,9 +106,32 @@ The workflow includes fallback read queries. Even if insert/delete fails due to 
 ### Check workflow status
 Go to the **Actions** tab in your GitHub repository to see detailed logs of each run.
 
+## Security Notes
+
+### Why Service Role Keys?
+
+- **Bypasses RLS**: No need to modify Row Level Security policies
+- **Full permissions**: Can insert and delete records
+- **Secure storage**: GitHub Secrets are encrypted
+- **No exposure**: Keys never appear in logs or code
+
+### Is this safe?
+
+✅ **Yes, when stored in GitHub Secrets:**
+- GitHub encrypts all secrets
+- Secrets are never visible in workflow logs
+- Only your GitHub Actions can access them
+- The workflow only performs insert+delete operations
+
+⚠️ **Important:**
+- Never commit service role keys to git
+- Only store them in GitHub Secrets
+- The workflow deletes records immediately after inserting
+
 ## Technical Details
 
 - Uses REST API with insert/delete operations
+- Service role key bypasses RLS for write operations
 - Timestamps ensure unique records
 - Automatic cleanup (delete immediately after insert)
 - Fallback to read queries if write operations fail

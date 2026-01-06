@@ -116,13 +116,29 @@ You should see:
    - Only used for keepalive pings
    - No sensitive information
 
-### Alternative: Service Role Key
+### Option 3: Use Service Role Keys (EASIEST - RECOMMENDED)
 
-If you're concerned about anonymous access, you can:
+Instead of modifying RLS policies, simply use service role keys:
 
-1. Use `SUPABASE_SERVICE_ROLE_KEY_1` and `SUPABASE_SERVICE_ROLE_KEY_2` secrets
-2. Service role bypasses RLS
-3. More powerful but requires careful handling
+1. Get your service_role keys from Supabase (Settings → API)
+2. Run the update script:
+   ```bash
+   cd /Users/dhruvvekariya/keepalive
+   ./update-secrets.sh
+   ```
+3. Paste your service role keys when prompted
+
+**Benefits:**
+- ✅ No SQL changes needed
+- ✅ Bypasses RLS automatically
+- ✅ Insert/delete operations work immediately
+- ✅ Secure when stored in GitHub Secrets
+
+**Or use GitHub CLI:**
+```bash
+gh secret set SUPABASE_KEY_1  # Paste Database 1 service_role key
+gh secret set SUPABASE_KEY_2  # Paste Database 2 service_role key
+```
 
 ⚠️ **Never commit service role keys to git** - only store them in GitHub Secrets.
 
