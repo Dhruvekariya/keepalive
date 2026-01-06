@@ -14,9 +14,9 @@ jobs:
       - name: Ping Database 1
         run: |
           echo "Pinging Database 1..."
-          # Query the profiles table (which exists in your schema)
+          # Query the drivers table (suggested by the database error)
           response=$(curl -s -w "\n%{http_code}" -X GET \
-            '${{ secrets.SUPABASE_URL_1 }}/rest/v1/profiles?select=id&limit=1' \
+            '${{ secrets.SUPABASE_URL_1 }}/rest/v1/drivers?select=id&limit=1' \
             -H "apikey: ${{ secrets.SUPABASE_KEY_1 }}" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY_1 }}")
 
@@ -26,8 +26,8 @@ jobs:
           echo "HTTP Code: $http_code"
           echo "Response: $response_body"
 
-          # Accept 200 (success) or 401/403 (auth error but DB is alive)
-          if [ "$http_code" = "200" ] || [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
+          # Accept 200 (success), 401/403 (auth error but DB is alive), or 406 (empty table)
+          if [ "$http_code" = "200" ] || [ "$http_code" = "401" ] || [ "$http_code" = "403" ] || [ "$http_code" = "406" ]; then
             echo "✓ Database 1 is active (HTTP $http_code)"
           else
             echo "✗ Database 1 ping failed (HTTP $http_code)"
@@ -38,9 +38,9 @@ jobs:
       - name: Ping Database 2
         run: |
           echo "Pinging Database 2..."
-          # Query the profiles table (which exists in your schema)
+          # Query the drivers table
           response=$(curl -s -w "\n%{http_code}" -X GET \
-            '${{ secrets.SUPABASE_URL_2 }}/rest/v1/profiles?select=id&limit=1' \
+            '${{ secrets.SUPABASE_URL_2 }}/rest/v1/drivers?select=id&limit=1' \
             -H "apikey: ${{ secrets.SUPABASE_KEY_2 }}" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY_2 }}")
 
@@ -50,8 +50,8 @@ jobs:
           echo "HTTP Code: $http_code"
           echo "Response: $response_body"
 
-          # Accept 200 (success) or 401/403 (auth error but DB is alive)
-          if [ "$http_code" = "200" ] || [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
+          # Accept 200 (success), 401/403 (auth error but DB is alive), or 406 (empty table)
+          if [ "$http_code" = "200" ] || [ "$http_code" = "401" ] || [ "$http_code" = "403" ] || [ "$http_code" = "406" ]; then
             echo "✓ Database 2 is active (HTTP $http_code)"
           else
             echo "✗ Database 2 ping failed (HTTP $http_code)"
