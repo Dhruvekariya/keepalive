@@ -13,11 +13,21 @@ jobs:
     steps:
       - name: Ping Database 1
         run: |
-          response=$(curl -s -w "\n%{http_code}" -X GET \
-            '${{ secrets.SUPABASE_URL_1 }}/rest/v1/keep_alive?select=id&limit=1' \
+          echo "Testing Database 1 connection..."
+          URL='${{ secrets.SUPABASE_URL_1 }}/rest/v1/keep_alive?select=id&limit=1'
+          echo "URL length: ${#URL}"
+          echo "First 10 chars: ${URL:0:10}"
+
+          response=$(curl -s -w "\n%{http_code}" -v -X GET \
+            "$URL" \
             -H "apikey: ${{ secrets.SUPABASE_KEY_1 }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY_1 }}")
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY_1 }}" 2>&1)
+
           http_code=$(echo "$response" | tail -n1)
+          echo "Full response:"
+          echo "$response"
+          echo "HTTP Code: $http_code"
+
           if [ "$http_code" = "200" ]; then
             echo "Database 1 pinged successfully (HTTP $http_code)"
           else
