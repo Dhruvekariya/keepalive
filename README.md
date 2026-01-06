@@ -24,8 +24,6 @@ gh secret set SUPABASE_URL_2     # Example: https://ijklmnop.supabase.co
 gh secret set SUPABASE_KEY_2     # Paste your Database 2 service_role key
 ```
 
-**URL format:** `https://your-project-id.supabase.co` (no trailing slash)
-
 Or set them manually: GitHub repo → Settings → Secrets and variables → Actions → New repository secret
 
 ### 3. Create keep_alive table in both databases
