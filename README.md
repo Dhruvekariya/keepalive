@@ -30,7 +30,7 @@ Or set them manually: GitHub repo → Settings → Secrets and variables → Act
 
 Open Supabase Dashboard → SQL Editor → New query
 
-Run this in **Database 1**:
+Run this in **Database 1 and 2**:
 
 ```sql
 DROP TABLE IF EXISTS public.keep_alive CASCADE;
@@ -46,7 +46,6 @@ CREATE POLICY "Allow all operations" ON public.keep_alive
     FOR ALL TO public USING (true) WITH CHECK (true);
 ```
 
-Run the same SQL in **Database 2**.
 
 ### 4. Done
 
