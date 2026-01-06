@@ -15,17 +15,16 @@ jobs:
         run: |
           echo "Keeping Database 1 alive..."
           TIMESTAMP=$(date +%s)
-          DRIVER_NAME="keepalive_${TIMESTAMP}"
 
-          # Step 1: Insert a temporary driver
-          echo "Inserting temporary driver: $DRIVER_NAME"
+          # Step 1: Insert a temporary record into keep_alive table
+          echo "Inserting temporary keepalive record..."
           insert_response=$(curl -s -w "\n%{http_code}" -X POST \
-            '${{ secrets.SUPABASE_URL_1 }}/rest/v1/drivers' \
+            '${{ secrets.SUPABASE_URL_1 }}/rest/v1/keep_alive' \
             -H "apikey: ${{ secrets.SUPABASE_KEY_1 }}" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY_1 }}" \
             -H "Content-Type: application/json" \
             -H "Prefer: return=representation" \
-            -d "{\"name\":\"$DRIVER_NAME\",\"is_active\":false}")
+            -d "{\"last_ping\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}")
 
           insert_http_code=$(echo "$insert_response" | tail -n1)
           insert_body=$(echo "$insert_response" | sed '$d')
@@ -34,15 +33,15 @@ jobs:
           echo "Insert Response: $insert_body"
 
           # Extract the ID from the response
-          DRIVER_ID=$(echo "$insert_body" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+          RECORD_ID=$(echo "$insert_body" | grep -o '"id":[0-9]*' | head -1 | cut -d':' -f2)
 
-          if [ -n "$DRIVER_ID" ]; then
-            echo "✓ Driver inserted successfully with ID: $DRIVER_ID"
+          if [ -n "$RECORD_ID" ]; then
+            echo "✓ Record inserted successfully with ID: $RECORD_ID"
 
-            # Step 2: Delete the temporary driver
-            echo "Deleting temporary driver..."
+            # Step 2: Delete the temporary record
+            echo "Deleting temporary record..."
             delete_response=$(curl -s -w "\n%{http_code}" -X DELETE \
-              "${{ secrets.SUPABASE_URL_1 }}/rest/v1/drivers?id=eq.$DRIVER_ID" \
+              "${{ secrets.SUPABASE_URL_1 }}/rest/v1/keep_alive?id=eq.$RECORD_ID" \
               -H "apikey: ${{ secrets.SUPABASE_KEY_1 }}" \
               -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY_1 }}")
 
@@ -59,7 +58,7 @@ jobs:
             # If insert fails, try a simple read query as fallback
             echo "⚠ Insert failed, falling back to read query..."
             response=$(curl -s -w "\n%{http_code}" -X GET \
-              '${{ secrets.SUPABASE_URL_1 }}/rest/v1/drivers?select=id&limit=1' \
+              '${{ secrets.SUPABASE_URL_1 }}/rest/v1/keep_alive?select=id&limit=1' \
               -H "apikey: ${{ secrets.SUPABASE_KEY_1 }}" \
               -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY_1 }}")
 

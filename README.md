@@ -12,8 +12,10 @@ GitHub Actions runs a scheduled workflow **twice daily** (every 12 hours at 6 AM
 
 ### Database-specific operations:
 
-- **Database 1**: Inserts/deletes a temporary driver named `keepalive_<timestamp>` in the `drivers` table
+- **Database 1**: Inserts/deletes a temporary record in the `keep_alive` table
 - **Database 2**: Inserts/deletes a temporary record in the `keep_alive` table
+
+Both databases use dedicated `keep_alive` tables that are separate from your production schema, ensuring no interference with your application data.
 
 This approach is more effective than simple read queries because write operations are a stronger indicator of active database usage.
 
@@ -30,14 +32,18 @@ Add your Supabase project details as GitHub Secrets in your repository:
 
 **Important:** Use the **service_role** key to enable insert/delete operations without RLS policy modifications.
 
-### 2. Create the keep_alive table in Database 2
+### 2. Verify keep_alive tables exist
 
-Run the SQL script `create_keepalive_table.sql` in your Database 2 SQL Editor (Supabase Dashboard):
+**Database 1**: Already has a `keep_alive` table ✅ (no action needed)
+
+**Database 2**: Run the SQL script `create_keepalive_table.sql` in your Database 2 SQL Editor:
 
 ```sql
 -- This creates the keep_alive table with proper RLS policies
 -- See create_keepalive_table.sql for the full script
 ```
+
+If you already ran this script, you're all set! ✅
 
 ### 3. Automated Execution
 
@@ -97,8 +103,8 @@ This ensures at least 2 write operations per day, well within the 7-day inactivi
 If your database gets paused, manually resume it from the Supabase dashboard. The workflow will keep it alive going forward.
 
 ### Workflow fails with "table not found"
+- **Database 1**: The `keep_alive` table should already exist in your schema
 - **Database 2**: Make sure you've created the `keep_alive` table using `create_keepalive_table.sql`
-- **Database 1**: The `drivers` table should already exist in your water bottle management schema
 
 ### Permission errors (401/403)
 The workflow includes fallback read queries. Even if insert/delete fails due to RLS policies, the read query will keep the database alive.
