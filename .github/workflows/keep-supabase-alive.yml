@@ -38,23 +38,35 @@ jobs:
       - name: Ping Database 2
         run: |
           echo "Pinging Database 2..."
-          # Query the drivers table
+          # Try multiple tables with fallback - just need to wake the DB
+          success=false
+
+          # Try drivers table first
           response=$(curl -s -w "\n%{http_code}" -X GET \
             '${{ secrets.SUPABASE_URL_2 }}/rest/v1/drivers?select=id&limit=1' \
             -H "apikey: ${{ secrets.SUPABASE_KEY_2 }}" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY_2 }}")
-
           http_code=$(echo "$response" | tail -n1)
-          response_body=$(echo "$response" | sed '$d')
 
-          echo "HTTP Code: $http_code"
-          echo "Response: $response_body"
-
-          # Accept 200 (success), 401/403 (auth error but DB is alive), or 406 (empty table)
           if [ "$http_code" = "200" ] || [ "$http_code" = "401" ] || [ "$http_code" = "403" ] || [ "$http_code" = "406" ]; then
-            echo "✓ Database 2 is active (HTTP $http_code)"
+            success=true
+            echo "✓ Database 2 is active via /drivers (HTTP $http_code)"
           else
-            echo "✗ Database 2 ping failed (HTTP $http_code)"
-            echo "Full response: $response"
+            echo "Drivers table not found (HTTP $http_code), trying root endpoint..."
+            # Fallback: Just ping the REST API root
+            response=$(curl -s -w "\n%{http_code}" -X GET \
+              '${{ secrets.SUPABASE_URL_2 }}/rest/v1/' \
+              -H "apikey: ${{ secrets.SUPABASE_KEY_2 }}" \
+              -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY_2 }}")
+            http_code=$(echo "$response" | tail -n1)
+
+            if [ "$http_code" = "200" ] || [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
+              success=true
+              echo "✓ Database 2 is active via root endpoint (HTTP $http_code)"
+            fi
+          fi
+
+          if [ "$success" = "false" ]; then
+            echo "✗ Database 2 ping failed - all endpoints returned errors"
             exit 1
           fi
