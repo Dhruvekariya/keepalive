@@ -26,9 +26,9 @@ gh secret set SUPABASE_KEY_2     # Paste your Database 2 service_role key
 
 Or set them manually: GitHub repo → Settings → Secrets and variables → Actions → New repository secret
 
-### 3. Create keep_alive table in Database 2
+### 3. Create keep_alive table in both databases
 
-Database 1 already has it. For Database 2, run this SQL:
+Run this SQL in **both Database 1 and Database 2**:
 
 ```sql
 DROP TABLE IF EXISTS public.keep_alive CASCADE;
@@ -43,6 +43,10 @@ ALTER TABLE public.keep_alive ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow all operations" ON public.keep_alive
     FOR ALL TO public USING (true) WITH CHECK (true);
 ```
+
+Go to Supabase Dashboard → SQL Editor → New query → Paste → Run
+
+Do this for both databases.
 
 ### 4. Done
 
